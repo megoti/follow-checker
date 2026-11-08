@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>フォロバチェッカー</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/* layout: one column; the three count tiles double as tabs above a single scannable list */
+:root {
+  --bg: #f3f5f7;
+  --surface: #ffffff;
+  --ink: #151a20;
+  --muted: #58626e;
+  --line: #dde2e8;
+  --accent: #0e6b73;
+  --accent-ink: #ffffff;
+  --accent-soft: #e0f0f1;
+  --font-body: "Zen Kaku Gothic New", "Hiragino Sans", "Noto Sans JP", system-ui, sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1216;
+    --surface: #171d23;
+    --ink: #e8ecf0;
+    --muted: #9aa5b1;
+    --line: #28313a;
+    --accent: #52c2c9;
+    --accent-ink: #08191b;
+    --accent-soft: #14282b;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1216;
+  --surface: #171d23;
+  --ink: #e8ecf0;
+  --muted: #9aa5b1;
+  --line: #28313a;
+  --accent: #52c2c9;
+  --accent-ink: #08191b;
+  --accent-soft: #14282b;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-text-size-adjust: 100%;
+}
+main {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 28px 16px 56px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+h1 {
+  margin: 0;
+  font-size: 28px;
+  line-height: 1.25;
+  font-weight: 700;
+  text-wrap: balance;
+}
+.lede { margin: 6px 0 0; color: var(--muted); font-size: 15px; }
+.privacy {
+  margin: 0;
+  padding: 10px 12px;
+  border-left: 3px solid var(--accent);
+  background: var(--accent-soft);
+  font-size: 14px;
+}
+
+details {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+summary { cursor: pointer; font-weight: 700; font-size: 15px; }
+details ol { margin: 10px 0 0; padding-left: 1.3em; font-size: 14px; color: var(--muted); display: flex; flex-direction: column; gap: 4px; }
+details code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px;
+  color: var(--ink);
+  background: var(--bg);
+  padding: 1px 5px;
+  border-radius: 4px;
+  word-break: break-all;
+}
+
+.files { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.sr { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; pointer-events: none; }
+.drop {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px;
+  min-height: 92px;
+  background: var(--surface);
+  border: 1.5px dashed var(--line);
+  border-radius: 10px;
+  cursor: pointer;
+}
+.drop:hover, .drop.over { border-color: var(--accent); }
+.drop:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+.drop.done { border-style: solid; border-color: var(--accent); background: var(--accent-soft); }
+.drop.zip { min-height: 104px; justify-content: center; }
+.drop.zip .drop-title { font-size: 17px; }
+.manual .files { margin-top: 10px; }
+.drop-title { font-weight: 700; font-size: 15px; }
+.drop-name { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+
+.banner { margin: 0; font-size: 14px; color: var(--muted); }
+.error { margin: 0; padding: 10px 12px; border-radius: 8px; background: #fbe9e7; color: #8a1c10; font-size: 14px; }
+:root[data-theme="dark"] .error { background: #3a1c18; color: #ffb4a8; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .error { background: #3a1c18; color: #ffb4a8; } }
+
+.tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.tile {
+  appearance: none;
+  font: inherit;
+  color: var(--ink);
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  cursor: pointer;
+}
+.tile[aria-selected="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.tile .num { font-size: 28px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.tile .lbl { font-size: 14px; font-weight: 700; line-height: 1.3; }
+.tile .sub { font-size: 12px; opacity: 0.8; line-height: 1.3; }
+
+.tools { display: flex; gap: 8px; }
+.tools input[type="search"] {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: 16px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 9px 12px;
+}
+.tools input[type="search"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.btn {
+  appearance: none;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--accent);
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  padding: 9px 14px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.btn:hover { background: var(--accent-soft); }
+.btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.count { margin: 0; font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.list li + li { border-top: 1px solid var(--line); }
+.list a {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  color: var(--ink);
+  text-decoration: none;
+}
+.list a:hover { background: var(--accent-soft); }
+.list a:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.list .name { overflow-wrap: anywhere; }
+.list .at { color: var(--muted); }
+.list .go { font-size: 13px; color: var(--accent); white-space: nowrap; }
+.list .empty { padding: 18px 14px; color: var(--muted); font-size: 14px; }
+.more { align-self: center; }
+.status { margin: 0; min-height: 1.4em; font-size: 14px; color: var(--accent); }
+.note { margin: 0; font-size: 13px; color: var(--muted); }
+
+@media (max-width: 420px) {
+  .tile { padding: 10px; }
+  .tile .num { font-size: 24px; }
+  .tile .lbl { font-size: 13px; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>フォロバチェッカー</h1>
+    <p class="lede">Instagramの書き出しデータから、フォローしているのにフォローされていない人を探します。</p>
+  </header>
+
+  <p class="privacy">ファイルはこのページの中だけで処理します。送信も保存もしません。ログインやパスワードは不要です。</p>
+
+  <details open>
+    <summary>ファイルの用意</summary>
+    <ol>
+      <li>Instagram で 設定 → アカウントセンター → 情報とアクセス許可 → 情報をダウンロード</li>
+      <li>「フォロワーとフォロー中」だけを選び、形式は <code>JSON</code> にする</li>
+      <li>届いたzipは解凍せず、そのまま下で選ぶ</li>
+    </ol>
+  </details>
+
+  <section aria-label="zipファイルを選ぶ">
+    <label class="drop zip" id="drop-zip" for="f-zip">
+      <span class="drop-title">zipファイルを選ぶ</span>
+      <span class="drop-name" id="n-zip">Instagramから届いたzipをそのまま選びます</span>
+    </label>
+    <input class="sr" type="file" id="f-zip">
+  </section>
+
+  <details class="manual">
+    <summary>zipを解凍済みの場合は個別に選ぶ</summary>
+    <section class="files" aria-label="ファイルを個別に選ぶ">
+      <label class="drop" id="drop-followers" for="f-followers">
+        <span class="drop-title">フォロワー</span>
+        <span class="drop-name" id="n-followers">followers_1.json を選ぶ(複数可)</span>
+      </label>
+      <input class="sr" type="file" id="f-followers" accept=".json,.html" multiple>
+
+      <label class="drop" id="drop-following" for="f-following">
+        <span class="drop-title">フォロー中</span>
+        <span class="drop-name" id="n-following">following.json を選ぶ</span>
+      </label>
+      <input class="sr" type="file" id="f-following" accept=".json,.html">
+    </section>
+  </details>
+
+  <p class="error" id="error" role="alert" hidden></p>
+  <p class="banner" id="banner"></p>
+
+  <div class="tiles" role="tablist" aria-label="結果の種類">
+    <button class="tile" role="tab" id="tab-notback" data-tab="notback" aria-selected="true">
+      <span class="num" id="c-notback">0</span>
+      <span class="lbl">フォロバなし</span>
+      <span class="sub">自分だけがフォロー</span>
+    </button>
+    <button class="tile" role="tab" id="tab-fans" data-tab="fans" aria-selected="false">
+      <span class="num" id="c-fans">0</span>
+      <span class="lbl">片思いされ</span>
+      <span class="sub">相手だけがフォロー</span>
+    </button>
+    <button class="tile" role="tab" id="tab-mutual" data-tab="mutual" aria-selected="false">
+      <span class="num" id="c-mutual">0</span>
+      <span class="lbl">相互</span>
+      <span class="sub">お互いにフォロー</span>
+    </button>
+  </div>
+
+  <div class="tools">
+    <input type="search" id="q" placeholder="ユーザー名で絞り込み" aria-label="ユーザー名で絞り込み" autocomplete="off" autocapitalize="off">
+    <button class="btn" id="copy" type="button">コピー</button>
+  </div>
+  <p class="count" id="count"></p>
+  <ul class="list" id="list" role="tabpanel"></ul>
+  <button class="btn more" id="more" type="button" hidden>さらに表示</button>
+  <p class="status" id="status" role="status"></p>
+
+  <p class="note">「フォロバなし」には、最初からフォローされていない人と、あとでフォローをやめた人の両方が入ります。書き出した時点のデータなので、最新の状態とは少しずれることがあります。</p>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script>
+(function () {
+  var SAMPLE = {
+    following: ['aoi.cafe','haru_run','kenta.photo','mio_books','sora_design','yuki.travel','brand_official','nao_music','ren.codes','tomo_gym','sakura_bake','daichi.fish','mei_art','lemon_studio'],
+    followers: ['aoi.cafe','haru_run','kenta.photo','mio_books','sora_design','shop_deals_77','yuki.travel','nao_music','ren.codes','new_friend22','tomo_gym']
+  };
+  var PAGE = 200;
+  var state = {
+    followers: null, following: null,
+    tab: 'notback', query: '', limit: PAGE
+  };
+
+  var $ = function (id) { return document.getElementById(id); };
+
+  function normalize(n) { return String(n || '').trim().replace(/^@/, '').toLowerCase(); }
+
+  function userFromHref(h) {
+    try {
+      var parts = new URL(h, 'https://www.instagram.com').pathname.split('/').filter(Boolean);
+      if (parts[0] === '_u') parts.shift();
+      return parts[0] || '';
+    } catch (e) { return ''; }
+  }
+
+  function fromJson(data, out) {
+    if (Array.isArray(data)) { data.forEach(function (d) { fromJson(d, out); }); return; }
+    if (data && typeof data === 'object') {
+      if (Array.isArray(data.string_list_data)) {
+        data.string_list_data.forEach(function (it) {
+          var n = (it && it.value) || data.title || userFromHref((it && it.href) || '');
+          if (n) out.add(normalize(n));
+        });
+        return;
+      }
+      Object.keys(data).forEach(function (k) { fromJson(data[k], out); });
+    }
+  }
+
+  function fromHtml(text, out) {
+    var doc = new DOMParser().parseFromString(text, 'text/html');
+    doc.querySelectorAll('a[href]').forEach(function (a) {
+      var h = a.getAttribute('href') || '';
+      if (!/instagram\.com/.test(h)) return;
+      var n = userFromHref(h) || a.textContent;
+      if (n) out.add(normalize(n));
+    });
+  }
+
+  function parseInto(name, text, out) {
+    if (/\.html?$/i.test(name)) { fromHtml(text, out); return; }
+    try { fromJson(JSON.parse(text), out); }
+    catch (e) { throw new Error(name + ' を読み込めませんでした。JSON形式で書き出したファイルを選んでください。'); }
+  }
+
+  function readSources(sources) {
+    var out = new Set();
+    return sources.reduce(function (p, s) {
+      return p.then(function () {
+        return s.text().then(function (t) { parseInto(s.name, t, out); });
+      });
+    }, Promise.resolve()).then(function () { return out; });
+  }
+
+  function readFiles(fileList) {
+    return readSources(Array.prototype.map.call(fileList, function (f) {
+      return { name: f.name, text: function () { return f.text(); } };
+    }));
+  }
+
+  function handleZip(file) {
+    if (!file) return;
+    showError('');
+    if (typeof JSZip === 'undefined') {
+      showError('zipを開く部品を読み込めませんでした。zipを解凍して、個別にファイルを選んでください。');
+      return;
+    }
+    var asSources = function (entries) {
+      return entries.map(function (en) {
+        return { name: en.name.split('/').pop(), text: function () { return en.async('string'); } };
+      });
+    };
+    JSZip.loadAsync(file).then(function (zip) {
+      var fl = [], fg = [];
+      zip.forEach(function (path, entry) {
+        if (entry.dir) return;
+        var base = path.split('/').pop();
+        if (/^followers_\d+\.(json|html)$/i.test(base)) fl.push(entry);
+        else if (/^following\.(json|html)$/i.test(base)) fg.push(entry);
+      });
+      if (!fl.length || !fg.length) {
+        throw new Error('zipの中にフォロワーとフォロー中のファイルが見つかりません。「フォロワーとフォロー中」を含めて書き出してください。');
+      }
+      return Promise.all([readSources(asSources(fl)), readSources(asSources(fg))]);
+    }, function () {
+      throw new Error('zipとして開けませんでした。Instagramから届いたzipを選んでください。');
+    }).then(function (r) {
+      if (!r[0].size || !r[1].size) throw new Error('ユーザーが見つかりませんでした。ファイルの中身を確認してください。');
+      state.followers = Array.from(r[0]);
+      state.following = Array.from(r[1]);
+      state.limit = PAGE;
+      $('drop-zip').classList.add('done');
+      $('n-zip').textContent = file.name + '(フォロワー ' + r[0].size + ' 人、フォロー中 ' + r[1].size + ' 人)';
+      render();
+    }).catch(function (e) {
+      showError(e.message || '読み込みに失敗しました。');
+    });
+  }
+
+  function showError(msg) {
+    var el = $('error');
+    el.textContent = msg || '';
+    el.hidden = !msg;
+  }
+
+  function data() {
+    var real = state.followers && state.following;
+    var followers = new Set(real ? state.followers : SAMPLE.followers);
+    var following = new Set(real ? state.following : SAMPLE.following);
+    var notback = [], fans = [], mutual = [];
+    following.forEach(function (u) { (followers.has(u) ? mutual : notback).push(u); });
+    followers.forEach(function (u) { if (!following.has(u)) fans.push(u); });
+    [notback, fans, mutual].forEach(function (a) { a.sort(); });
+    return { real: !!real, followers: followers.size, following: following.size, notback: notback, fans: fans, mutual: mutual };
+  }
+
+  function currentList(d) {
+    var q = state.query.trim().toLowerCase().replace(/^@/, '');
+    var list = d[state.tab];
+    return q ? list.filter(function (u) { return u.indexOf(q) !== -1; }) : list;
+  }
+
+  function render() {
+    var d = data();
+    $('c-notback').textContent = d.notback.length;
+    $('c-fans').textContent = d.fans.length;
+    $('c-mutual').textContent = d.mutual.length;
+
+    var b = $('banner');
+    if (d.real) {
+      b.textContent = 'フォロー中 ' + d.following + ' 人、フォロワー ' + d.followers + ' 人を読み込みました。';
+    } else if (state.followers && !state.following) {
+      b.textContent = 'あと「フォロー中」のファイルを選ぶと結果が出ます。いまはサンプルを表示しています。';
+    } else if (state.following && !state.followers) {
+      b.textContent = 'あと「フォロワー」のファイルを選ぶと結果が出ます。いまはサンプルを表示しています。';
+    } else {
+      b.textContent = 'サンプルを表示中です。zipを選ぶと、自分のデータに切り替わります。';
+    }
+
+    document.querySelectorAll('.tile').forEach(function (t) {
+      t.setAttribute('aria-selected', String(t.getAttribute('data-tab') === state.tab));
+    });
+
+    var list = currentList(d);
+    var ul = $('list');
+    ul.textContent = '';
+    if (!list.length) {
+      var li = document.createElement('li');
+      li.className = 'empty';
+      li.textContent = state.query ? '一致するユーザーはいません。' : '該当する人はいません。';
+      ul.appendChild(li);
+    } else {
+      var frag = document.createDocumentFragment();
+      list.slice(0, state.limit).forEach(function (u) {
+        var li = document.createElement('li');
+        var a = document.createElement('a');
+        a.href = 'https://www.instagram.com/' + encodeURIComponent(u) + '/';
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        var name = document.createElement('span');
+        name.className = 'name';
+        var at = document.createElement('span');
+        at.className = 'at';
+        at.textContent = '@';
+        name.appendChild(at);
+        name.appendChild(document.createTextNode(u));
+        var go = document.createElement('span');
+        go.className = 'go';
+        go.textContent = '開く';
+        a.appendChild(name);
+        a.appendChild(go);
+        li.appendChild(a);
+        frag.appendChild(li);
+      });
+      ul.appendChild(frag);
+    }
+    $('count').textContent = list.length + ' 人' + (state.query ? '(絞り込み中)' : '');
+    $('more').hidden = list.length <= state.limit;
+    $('copy').disabled = !list.length;
+  }
+
+  function setDrop(kind, files, count) {
+    var drop = $('drop-' + kind);
+    var label = $('n-' + kind);
+    if (!files) {
+      drop.classList.remove('done');
+      return;
+    }
+    drop.classList.add('done');
+    var names = Array.prototype.map.call(files, function (f) { return f.name; }).join(', ');
+    label.textContent = names + '(' + count + ' 人)';
+  }
+
+  function handle(kind, fileList) {
+    if (!fileList || !fileList.length) return;
+    showError('');
+    readFiles(fileList).then(function (set) {
+      if (!set.size) throw new Error('ユーザーが見つかりませんでした。ファイルの種類を確認してください。');
+      state[kind] = Array.from(set);
+      state.limit = PAGE;
+      setDrop(kind, fileList, set.size);
+      render();
+    }).catch(function (e) {
+      showError(e.message || '読み込みに失敗しました。');
+    });
+  }
+
+  ['followers', 'following'].forEach(function (kind) {
+    $('f-' + kind).addEventListener('change', function (e) { handle(kind, e.target.files); });
+    var drop = $('drop-' + kind);
+    drop.addEventListener('dragover', function (e) { e.preventDefault(); drop.classList.add('over'); });
+    drop.addEventListener('dragleave', function () { drop.classList.remove('over'); });
+    drop.addEventListener('drop', function (e) {
+      e.preventDefault();
+      drop.classList.remove('over');
+      handle(kind, e.dataTransfer && e.dataTransfer.files);
+    });
+  });
+
+  $('f-zip').addEventListener('change', function (e) { handleZip(e.target.files && e.target.files[0]); });
+  var zdrop = $('drop-zip');
+  zdrop.addEventListener('dragover', function (e) { e.preventDefault(); zdrop.classList.add('over'); });
+  zdrop.addEventListener('dragleave', function () { zdrop.classList.remove('over'); });
+  zdrop.addEventListener('drop', function (e) {
+    e.preventDefault();
+    zdrop.classList.remove('over');
+    handleZip(e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]);
+  });
+
+  document.querySelectorAll('.tile').forEach(function (t) {
+    t.addEventListener('click', function () {
+      state.tab = t.getAttribute('data-tab');
+      state.limit = PAGE;
+      $('status').textContent = '';
+      render();
+    });
+  });
+
+  $('q').addEventListener('input', function (e) {
+    state.query = e.target.value;
+    state.limit = PAGE;
+    render();
+  });
+
+  $('more').addEventListener('click', function () {
+    state.limit += PAGE;
+    render();
+  });
+
+  function legacyCopy(text) {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    var ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+    document.body.removeChild(ta);
+    return ok;
+  }
+
+  $('copy').addEventListener('click', function () {
+    var text = currentList(data()).join('\n');
+    var done = function (ok) {
+      $('status').textContent = ok ? 'ユーザー名をコピーしました。' : 'コピーできませんでした。リストを長押しして選んでください。';
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { done(true); }, function () { done(legacyCopy(text)); });
+    } else {
+      done(legacyCopy(text));
+    }
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>
